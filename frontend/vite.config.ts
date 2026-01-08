@@ -27,11 +27,14 @@ export default defineConfig({
     }
   },
 
-  // 代理配置 (保持不变)
   server: {
+    port: 5173, // 前端运行端口
     proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
+      // 这里的配置意思是：
+      // 当前端发起 /user/login 请求时，
+      // Vite 会把它转发给 http://localhost:8080/user/login
+      '^/(user|scenario|session|speech|dialogue|evaluation|profile)': {
+        target: 'http://localhost:8080', // 👈 这里填后端运行的地址
         changeOrigin: true,
       }
     }

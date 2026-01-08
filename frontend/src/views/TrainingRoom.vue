@@ -1,198 +1,149 @@
 <template>
   <div class="room-container">
     <van-nav-bar 
-      :title="`训练中 (第 ${currentRound} 轮)`" 
-      left-arrow
-      left-text="结束"
-      @click-left="handleFinish"
-      fixed 
-      placeholder 
+      :title="`第 ${currentRound} 轮`" 
+      left-text="结束" 
+      @click-left="manualFinish" 
+      fixed placeholder 
     />
 
     <div class="chat-list" ref="chatRef">
       <div v-for="(msg, index) in messages" :key="index" :class="['msg-row', msg.role === 'USER' ? 'msg-right' : 'msg-left']">
         <div class="avatar">{{ msg.role === 'USER' ? '我' : 'AI' }}</div>
         <div class="bubble">
-          <div v-if="msg.audioUrl" class="voice-content">
-            <van-icon name="volume-o" size="16" /> 
-            <span>点击播放录音</span>
-          </div>
-          <div class="text-content">{{ msg.content }}</div>
+          {{ msg.content }}
+          <div v-if="msg.hint" class="hint-box">💡 提示: {{ msg.hint }}</div>
         </div>
       </div>
       
       <div v-if="loading" class="msg-row msg-left">
         <div class="avatar">AI</div>
-        <div class="bubble loading-bubble">
-          <van-loading type="spinner" size="16px" color="#666" /> 正在思考追问...
-        </div>
+        <div class="bubble">...</div>
       </div>
     </div>
 
     <div class="input-area">
-      <div class="tool-bar">
-        <div class="icon-btn" @click="toggleMode">
-          <van-icon :name="inputMode === 'TEXT' ? 'volume-o' : 'keyboard-o'" size="26" color="#333"/>
-        </div>
-        
-        <div class="input-wrapper" v-if="inputMode === 'TEXT'">
-          <input 
-            v-model="inputText" 
-            class="msg-input" 
-            placeholder="请输入回答..." 
-            @keyup.enter="sendText"
-          />
-        </div>
-
-        <div class="input-wrapper" v-else>
-          <button 
-            class="voice-btn" 
-            :class="{ recording: isRecording }"
-            @mousedown="startRecord" 
-            @mouseup="stopRecord"
-            @touchstart.prevent="startRecord"
-            @touchend.prevent="stopRecord"
-          >
-            {{ isRecording ? '松开 发送' : '按住 说话' }}
-          </button>
-        </div>
-
-        <div class="send-btn" v-if="inputMode === 'TEXT'">
-          <van-button size="small" type="primary" @click="sendText" :disabled="!inputText">发送</van-button>
-        </div>
-      </div>
+      <van-field 
+        v-model="inputText" 
+        placeholder="请输入回答..." 
+        center 
+        clearable
+        @keydown.enter.prevent="sendText"
+      >
+        <template #button>
+          <van-button size="small" type="primary" @click="sendText" :disabled="loading || !inputText">发送</van-button>
+        </template>
+      </van-field>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue';
+import { ref, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { submitMessage, finishSession } from '@/api'; // 确保你的 api/index.ts 包含这些
-import { showConfirmDialog, showToast } from 'vant';
+import { getNextQuestion, submitEvaluation } from '@/api';
+import { showConfirmDialog, showToast, closeToast } from 'vant'; // 👈 引入 closeToast
 
 const route = useRoute();
 const router = useRouter();
-const sessionId = Number(route.params.sessionId);
+const sessionId = route.params.sessionId as string;
 
-// 状态管理
 const messages = ref<any[]>([
-  { role: 'SYSTEM', content: '你好，我是你的面试官。请先做一个简单的自我介绍。' }
+  { role: 'SYSTEM', content: '你好，我是面试官。请开始你的自我介绍。' } 
 ]);
 const currentRound = ref(1);
-const loading = ref(false);
-const inputMode = ref<'TEXT'|'VOICE'>('TEXT');
 const inputText = ref('');
-const isRecording = ref(false);
+const loading = ref(false);
 const chatRef = ref<HTMLElement>();
 
-// 自动滚动到底部
-const scrollToBottom = () => {
-  nextTick(() => {
-    if (chatRef.value) {
-      chatRef.value.scrollTop = chatRef.value.scrollHeight;
-    }
-  });
-};
+const scrollToBottom = () => nextTick(() => {
+  if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight;
+});
 
-const toggleMode = () => {
-  inputMode.value = inputMode.value === 'TEXT' ? 'VOICE' : 'TEXT';
-};
-
-// 1. 发送文本逻辑
-const sendText = async () => {
-  if (!inputText.value.trim()) return;
-  
-  // UI 乐观更新：先显示用户说的话
-  const userMsg = inputText.value;
-  messages.value.push({ role: 'USER', content: userMsg });
-  inputText.value = '';
-  scrollToBottom();
-
-  await processResponse(userMsg);
-};
-
-// 2. 模拟录音逻辑
-const startRecord = () => {
-  isRecording.value = true;
-  showToast('正在录音...');
-};
-const stopRecord = () => {
-  isRecording.value = false;
-  // 这里模拟 ASR 结果，实际应调用 uploadAudio 接口
-  const mockAsrText = "（语音转文字结果）我觉得在这个项目中，我遇到的最大困难是并发处理...";
-  messages.value.push({ role: 'USER', content: mockAsrText, audioUrl: 'mock_audio.mp3' });
-  scrollToBottom();
-  processResponse(mockAsrText);
-};
-
-// 3. 处理后端交互
-const processResponse = async (userText: string) => {
-  loading.value = true;
+// ✅ 核心修复：提交任务并清理 Toast
+const submitTask = async () => {
   try {
-    // 调用 API 提交回答
-    const res: any = await submitMessage(sessionId, {
-      roundNo: currentRound.value,
-      userText: userText
+    // 开启一个持续的 Loading，禁止用户乱点
+    showToast({ message: '正在生成评估报告...', type: 'loading', duration: 0, forbidClick: true });
+    
+    // 提交评估
+    await submitEvaluation({ sessionId });
+    
+    // 🔴 关键修复：跳转前必须关闭 Loading！
+    closeToast();
+    
+    // 跳转
+    router.replace(`/report/${sessionId}`);
+  } catch (e) {
+    closeToast(); // 失败也要关闭
+    showToast('提交失败，请重试');
+  }
+};
+
+const sendText = async () => {
+  if (!inputText.value) return;
+  
+  messages.value.push({ role: 'USER', content: inputText.value });
+  const val = inputText.value;
+  inputText.value = '';
+  loading.value = true;
+  scrollToBottom();
+
+  try {
+    const res: any = await getNextQuestion({
+      sessionId: sessionId,
+      currentRound: currentRound.value,
+      userAnswer: val
     });
 
-    // 接收 AI 回复
-    messages.value.push({ role: 'SYSTEM', content: res.nextQuestion });
-    currentRound.value = res.currentRound;
-
-    // 检查是否需要跳转报告页
-    if (res.sessionStatus === 'PENDING_EVAL' || res.sessionStatus === 'TERMINATED') {
-      showToast({ message: '训练结束，生成报告中...', duration: 2000 });
-      setTimeout(() => router.replace(`/report/${sessionId}`), 1000);
+    if (res.isEnd) {
+      if (res.question) {
+        messages.value.push({ role: 'SYSTEM', content: res.question });
+        scrollToBottom();
+      }
+      // 延迟跳转
+      setTimeout(() => {
+        submitTask();
+      }, 1500);
+      return;
     }
+
+    messages.value.push({ 
+      role: 'SYSTEM', 
+      content: res.question || "...", 
+      hint: res.hint 
+    });
+    
+    if (res.round) currentRound.value = res.round;
+
   } catch (error) {
     console.error(error);
+    showToast('AI 响应失败');
   } finally {
     loading.value = false;
     scrollToBottom();
   }
 };
 
-// 4. 手动结束训练
-const handleFinish = () => {
-  showConfirmDialog({
-    title: '结束训练',
-    message: '确定要提前结束本次对练并生成报告吗？'
-  }).then(async () => {
-    await finishSession(sessionId);
-    router.replace(`/report/${sessionId}`);
-  }).catch(() => {});
+const manualFinish = () => {
+  showConfirmDialog({ title: '结束训练', message: '确定要提前结束并生成评估报告吗？' })
+    .then(() => {
+      submitTask();
+    }).catch(() => {});
 };
 </script>
 
 <style scoped>
+/* 样式保持不变 */
 .room-container { height: 100vh; display: flex; flex-direction: column; background: #ededed; }
-
-.chat-list { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px; }
-
+.chat-list { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; }
 .msg-row { display: flex; width: 100%; }
-.msg-left { justify-content: flex-start; }
 .msg-right { justify-content: flex-end; }
-
-.avatar { width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #fff; flex-shrink: 0; }
+.avatar { width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; flex-shrink: 0; }
 .msg-left .avatar { background: #ff976a; margin-right: 10px; }
 .msg-right .avatar { background: #1989fa; margin-left: 10px; order: 2; }
-
-.bubble { max-width: 70%; padding: 10px 14px; border-radius: 8px; font-size: 15px; line-height: 1.5; word-wrap: break-word; position: relative; }
-.msg-left .bubble { background: #fff; color: #333; }
-.msg-right .bubble { background: #95ec69; color: #000; } /* 类似微信的绿色 */
-
-.loading-bubble { display: flex; align-items: center; gap: 8px; color: #999; font-size: 13px; }
-.voice-content { font-size: 13px; opacity: 0.8; margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
-
-/* 底部输入框样式 */
-.input-area { background: #f7f7f7; padding: 8px 10px; border-top: 1px solid #dcdcdc; padding-bottom: env(safe-area-inset-bottom); }
-.tool-bar { display: flex; align-items: center; height: 40px; gap: 10px; }
-.input-wrapper { flex: 1; height: 100%; }
-
-.msg-input { width: 100%; height: 100%; border: none; border-radius: 4px; padding: 0 10px; background: #fff; box-sizing: border-box; }
-.msg-input:focus { outline: none; }
-
-.voice-btn { width: 100%; height: 100%; border: 1px solid #ddd; background: #fff; border-radius: 4px; font-weight: bold; color: #333; }
-.voice-btn:active, .voice-btn.recording { background: #ddd; color: #000; }
+.bubble { max-width: 75%; padding: 12px; border-radius: 8px; font-size: 15px; line-height: 1.5; background: #fff; position: relative; word-wrap: break-word; }
+.msg-right .bubble { background: #95ec69; color: #000; }
+.hint-box { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #eee; color: #e6a23c; font-size: 12px; }
+.input-area { background: #f7f7f7; padding: 10px; border-top: 1px solid #ddd; }
 </style>

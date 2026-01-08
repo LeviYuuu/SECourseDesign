@@ -1,13 +1,12 @@
 import axios from 'axios';
 import { showToast, showDialog } from 'vant';
 
-// 创建 axios 实例
 const service = axios.create({
-  baseURL: '/api', // 配合 vite.config.ts 代理
+  baseURL: 'http://localhost:8080', 
   timeout: 15000,
 });
 
-// 请求拦截器：注入 Bearer Token
+// 请求拦截器
 service.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -19,15 +18,14 @@ service.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// 响应拦截器：处理业务状态码
+// 响应拦截器
 service.interceptors.response.use(
   (response) => {
     const res = response.data;
-    // 规约约定：code === 0 为成功
-    if (res.code !== 0) {
-      // 处理 Token 过期 (401)
+    // ✅ 严格遵循 V1.1 规约：code === 1 代表成功
+    if (res.code !== 1) {
       if (res.code === 401) {
-        showDialog({ message: '登录已过期，请重新登录' }).then(() => {
+        showDialog({ message: '登录失效，请重新登录' }).then(() => {
           localStorage.clear();
           window.location.href = '/login';
         });
@@ -36,7 +34,8 @@ service.interceptors.response.use(
       }
       return Promise.reject(new Error(res.msg || 'Error'));
     }
-    return res.data;
+    // 直接返回 data 层数据
+    return res.data; 
   },
   (error) => {
     showToast(error.message || '网络异常');

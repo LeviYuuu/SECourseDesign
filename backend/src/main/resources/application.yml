@@ -1,0 +1,16 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 请确保地址和你的阿里云控制台一致
+    url: jdbc:mysql://rm-bp148g3v3db180i4dho.mysql.rds.aliyuncs.com:3306/social_training?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false
+    # ⚠️ 务必填入正确的账号和密码
+    username: svc
+    password: SEsvc123
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl

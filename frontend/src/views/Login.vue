@@ -1,20 +1,45 @@
 <template>
   <div class="login-page">
-    <h2>社交焦虑陪练系统</h2>
+    <div class="logo-area">
+      <div class="logo">💬</div>
+      <h2>社交焦虑陪练系统</h2>
+      <p class="sub-title">AI 驱动的专业场景模拟训练</p>
+    </div>
+
     <van-form @submit="onSubmit">
       <van-cell-group inset>
-        <van-field v-model="form.account" name="学号" label="学号" placeholder="请输入学号" />
-        <van-field v-model="form.password" type="password" name="密码" label="密码" placeholder="请输入密码" />
+        <van-field
+          v-model="form.username"
+          name="username"
+          label="账号"
+          placeholder="请输入学号/手机号"
+          :rules="[{ required: true, message: '请填写账号' }]"
+        />
+        <van-field
+          v-model="form.password"
+          type="password"
+          name="password"
+          label="密码"
+          placeholder="请输入密码"
+          :rules="[{ required: true, message: '请填写密码' }]"
+        />
       </van-cell-group>
-      <div style="margin: 16px;">
-        <van-button round block type="primary" native-type="submit">登录</van-button>
+      
+      <div style="margin: 30px 16px;">
+        <van-button round block type="primary" native-type="submit" :loading="loading">
+          立即登录
+        </van-button>
       </div>
     </van-form>
+
+    <div class="footer">
+      基于 V1.1 微服务架构设计
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { login } from '@/api';
 import { useUserStore } from '@/stores/user';
@@ -22,21 +47,35 @@ import { showToast } from 'vant';
 
 const router = useRouter();
 const userStore = useUserStore();
-const form = reactive({ account: '20230001', password: 'password', loginType: 'PASSWORD', accountType: 'student_no' });
+const loading = ref(false);
+
+const form = reactive({
+  username: '20230001',
+  password: 'password'
+});
 
 const onSubmit = async () => {
   try {
     const res: any = await login(form);
-    userStore.setLoginState(res.token, res.user);
+    // 后端 AuthController 返回的是: { userId: 1, nickname: '...' }
+    // 确保这里取值正确
+    userStore.setLoginState(res.token, { 
+        userId: res.userId, // 这里的 key 要和后端 Map 的 key 一致
+        nickname: res.nickname 
+    });
     showToast('登录成功');
     router.push('/scenarios');
-  } catch (e) {
-    // 错误已在 request.ts 处理
+  } catch (err) {
+    console.error(err);
   }
 };
 </script>
 
 <style scoped>
-.login-page { padding-top: 100px; text-align: center; background-color: #f7f8fa; height: 100vh; }
-h2 { margin-bottom: 40px; color: #1989fa; }
+.login-page { min-height: 100vh; background-color: #f7f8fa; padding-top: 80px; box-sizing: border-box; }
+.logo-area { text-align: center; margin-bottom: 40px; }
+.logo { font-size: 60px; margin-bottom: 10px; }
+h2 { color: #333; margin: 0 0 10px 0; font-size: 24px; }
+.sub-title { color: #999; font-size: 14px; margin: 0; }
+.footer { text-align: center; margin-top: 50px; color: #ccc; font-size: 12px; }
 </style>

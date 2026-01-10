@@ -49,6 +49,7 @@ import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { getScenarios, createSession } from '@/api';
 import { showToast } from 'vant';
+import { useUserStore } from '@/stores/user';
 
 const router = useRouter();
 const scenarios = ref<any[]>([]);
@@ -76,8 +77,8 @@ const startTraining = async () => {
 
     // 1. 获取用户 ID (优先从本地存储取，取不到才用默认值)
     // 注意：请确保登录成功后，您把 userId 存到了 localStorage 或 Pinia 中
-    const storageUserId = localStorage.getItem('userId');
-    const finalUserId = storageUserId ? Number(storageUserId) : 1001;
+    const userStore = useUserStore();
+    const finalUserId = userStore.userInfo.userId || 1001;
 
     // 2. 发送请求
     const res: any = await createSession({

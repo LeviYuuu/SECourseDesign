@@ -30,6 +30,13 @@
           立即登录
         </van-button>
       </div>
+      
+      <div style="text-align: right; margin-top: 10px;">
+        <span style="color: #666; font-size: 14px;">还没有账号？</span>
+        <router-link to="/register" style="color: #409eff; font-size: 14px; text-decoration: none;">
+          去注册
+        </router-link>
+      </div>
     </van-form>
 
     <div class="footer">

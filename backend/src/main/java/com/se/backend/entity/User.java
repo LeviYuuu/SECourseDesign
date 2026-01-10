@@ -10,17 +10,21 @@ public class User {
     @TableId(value = "user_id", type = IdType.AUTO)
     private Long userId;
 
-    @TableField("account_no")
-    private String accountNo; // 对应数据库 account_no
+    private String nickname;
 
     @TableField("account_type")
-    private String accountType; // 对应数据库 account_type
+    private String accountType;
 
-    private String nickname;
+    @TableField("account_no")
+    private String accountNo;
+
     private String status;
 
-    @TableField("created_at")
+    @TableField(value = "created_at", fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
+
+    @TableField(value = "updated_at", fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updatedAt;
     
     @TableField("deleted_at")
     private LocalDateTime deletedAt;

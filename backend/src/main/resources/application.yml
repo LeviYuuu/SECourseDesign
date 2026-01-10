@@ -14,3 +14,42 @@ mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+ai:
+  speech:
+    volcengine:
+      # 火山控制台：AppID / Access Token
+      app-id: "4259608425"
+      access-token: "9MICiKIYKMjycBrm9sakXfR6Mfd-LOy5"
+
+      # ASR：录音文件识别标准版（提交+查询）
+      asr:
+        submit-url: "https://openspeech.bytedance.com/api/v3/auc/bigmodel/submit"
+        query-url:  "https://openspeech.bytedance.com/api/v3/auc/bigmodel/query"
+        # 资源 ID（按你实际开通的模型选择）
+        resource-id: "volc.seedasr.auc"   # 或 volc.seedasr.auc
+        # 你们要不要固定默认参数（可选）
+        default:
+          model-name: "bigmodel"
+          format: "wav"
+          rate: 16000
+          bits: 16
+          channel: 1
+
+      # TTS：按你们最终选型（HTTP 或 WS）
+      tts:
+        ws-url: "wss://openspeech.bytedance.com/api/v3/tts/bidirection"
+        resource-id:  "seed-tts-2.0"          # 如果你们用到 cluster 概念就保留
+        voice-type: "zh_male_m191_uranus_bigtts"           # 示例：按控制台/音色列表确定
+        encoding: "mp3"
+        speed: 1.0
+        volume: 10
+        pitch: 10
+  
+  llm:
+    # 截图中的 Endpoint: openai: /v1/chat/completions
+    # 注意：通常BaseUrl不包含具体的 path (/chat/completions)，SDK会自动拼接
+    base-url: "https://aizex.top/v1" 
+    api-key: "sk-ZXkHEKz4x6IWZAFuBbygeLsGiApxaSn5QG392zoaiAh4ncGH"
+    # 截图明确指出模型名称为 gemini-3-pro
+    model: "gpt-5"

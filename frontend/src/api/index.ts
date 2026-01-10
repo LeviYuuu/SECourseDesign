@@ -1,49 +1,69 @@
 import request from '@/utils/request';
 
-// ✅ 关闭 Mock，连接真实后端
-const USE_MOCK = false;
-
 // ==========================================
-// 1. 认证服务 (Auth Subsystem)
+// 1. 认证服务 (User/Auth)
 // ==========================================
-// 对应后端 AuthController
+// ✅ 修改：指向 /user/login
 export const login = (data: { username: string; password?: string }) => {
-  return request({ url: '/auth/login', method: 'post', data });
+  return request({ url: '/user/login', method: 'post', data });
 };
 
+// ✅ 修改：指向 /user/register
 export const register = (data: any) => {
-  return request({ url: '/auth/register', method: 'post', data });
+  return request({ url: '/user/register', method: 'post', data });
 };
 
 // ==========================================
-// 2. 场景服务 (Scenario Subsystem)
+// 2. 场景服务 (Scenario)
 // ==========================================
+// 保持不变，后端也是 /scenario/list
 export const getScenarios = (params: any = {}) => {
   return request({ url: '/scenario/list', method: 'get', params });
 };
 
 // ==========================================
-// 3. 会话服务 (Session/Dialogue Subsystem)
+// 3. 会话服务 (Session/Chat)
 // ==========================================
-// 创建会话
+// 保持不变
 export const createSession = (data: any) => {
   return request({ url: '/session/create', method: 'post', data });
 };
 
-// 获取下一轮问题
 export const getNextQuestion = (data: any) => {
-  return request({ url: '/dialogue/next', method: 'post', data });
+  return request({
+    url: '/dialogue/next',
+    method: 'post',
+    data
+  });
 };
 
-// ==========================================
-// 4. 评估服务 (Evaluation Subsystem)
-// ==========================================
-export const submitEvaluation = (data: { sessionId: string }) => {
-  return request({ url: '/evaluation/submit', method: 'post', data });
-};
+export function generateTTS(data: { text: string; sessionId?: string }) {
+  return request({
+    url: '/speech/tts',
+    method: 'post',
+    data
+  });
+}
+
+// 生成/提交评估
+export function submitEvaluation(data: { sessionId: string }) {
+  return request({
+    url: '/evaluation/submit',
+    method: 'post',
+    data
+  });
+}
+
+// 获取评估报告
+export function getEvaluationReport(sessionId: string) {
+  return request({
+    url: `/evaluation/report/${sessionId}`,
+    method: 'get'
+  });
+}
 
 export const getReport = (params: { sessionId: string }) => {
-  return request({ url: '/evaluation/report', method: 'get', params });
+  return request({ url: '/report/detail', method: 'get', params });
 };
 
 // ==========================================
@@ -63,7 +83,14 @@ export const getHistoryList = (params: { userId: number; page?: number; size?: n
 // 6. 语音与风控服务 (Speech & Risk Subsystem)
 // ==========================================
 export const transcribeAudio = (data: FormData) => {
-  return request({ url: '/speech/transcribe', method: 'post', data });
+  return request({
+    url: '/speech/transcribe',
+    method: 'post',
+    data: data, // 直接传递 FormData 对象
+    headers: {
+      'Content-Type': 'multipart/form-data' 
+    }
+  });
 };
 
 export const checkRisk = (data: { content: string }) => {

@@ -19,13 +19,19 @@ public class TrainingSession {
     private String status;
 
     @TableField("end_reason")
-    private String endReason; // 补充字段
+    private String endReason;
+
+    @TableField("background_json")
+    private String backgroundJson;
+
+    @TableField("scenario_snapshot_json")
+    private String scenarioSnapshotJson;
+
+    @TableField("tts_enabled")
+    private Boolean ttsEnabled;
 
     @TableField("current_round")
     private Integer currentRound;
-
-    @TableField("tts_enabled")
-    private Boolean ttsEnabled; // 补充字段
 
     @TableField("started_at")
     private LocalDateTime startedAt;
@@ -33,12 +39,9 @@ public class TrainingSession {
     @TableField("ended_at")
     private LocalDateTime endedAt;
 
-    @TableField("created_at")
+    @TableField(value = "created_at", fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
-    
-    @TableField("updated_at")
-    private LocalDateTime updatedAt;
 
-    @TableField("deleted_at")
-    private LocalDateTime deletedAt;
+    @TableField(value = "updated_at", fill = FieldFill.INSERT_UPDATE)
+    private LocalDateTime updatedAt;
 }

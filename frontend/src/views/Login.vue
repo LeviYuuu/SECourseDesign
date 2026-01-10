@@ -62,18 +62,26 @@ const form = reactive({
 });
 
 const onSubmit = async () => {
+  loading.value = true;
   try {
-    const res: any = await login(form);
-    // 后端 AuthController 返回的是: { userId: 1, nickname: '...' }
-    // 确保这里取值正确
-    userStore.setLoginState(res.token, { 
-        userId: res.userId, // 这里的 key 要和后端 Map 的 key 一致
-        nickname: res.nickname 
-    });
-    showToast('登录成功');
-    router.push('/scenarios');
-  } catch (err) {
-    console.error(err);
+    const data: any = await login(form);
+    
+    // ✅ 确保正确存储用户信息
+    if (data && data.token) {
+      userStore.setLoginState(data.token, { 
+        userId: data.userId,
+        nickname: data.nickname || form.username
+      });
+      showToast('登录成功');
+      router.push('/scenarios');
+    } else {
+      throw new Error('登录失败：返回数据格式异常');
+    }
+  } catch (err: any) {
+    console.error('Login error:', err);
+    showToast(err.message || '登录失败');
+  } finally {
+    loading.value = false;
   }
 };
 </script>

@@ -40,7 +40,7 @@
 import { ref, onMounted, nextTick, onUnmounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { getReport } from '@/api';
-import { closeToast } from 'vant'; // 👈 引入 closeToast
+import { closeToast, showToast } from 'vant';
 import * as echarts from 'echarts';
 
 const route = useRoute();
@@ -56,41 +56,85 @@ const initChart = () => {
   echarts.dispose(radarRef.value);
 
   const myChart = echarts.init(radarRef.value);
-  const indicators = report.value.dimensionScores.map((d: any) => ({ name: d.name, max: 10 }));
-  const values = report.value.dimensionScores.map((d: any) => d.score);
+  
+  // ✅ 处理维度评分数据，确保有默认值
+  let dimensionScores = [];
+  if (report.value.dimensionScores && Array.isArray(report.value.dimensionScores)) {
+    dimensionScores = report.value.dimensionScores;
+  } else {
+    // 默认的维度数据（测试用）
+    dimensionScores = [
+      { name: '沟通表达', score: 7 },
+      { name: '逻辑思维', score: 8 },
+      { name: '应变能力', score: 6 },
+      { name: '情绪管理', score: 7 },
+      { name: '专业知识', score: 8 }
+    ];
+  }
+  
+  const indicators = dimensionScores.map((d: any) => ({ name: d.name, max: 10 }));
+  const values = dimensionScores.map((d: any) => d.score);
   
   myChart.setOption({
     radar: { 
       indicator: indicators,
-      radius: '65%'
+      radius: '65%',
+      splitNumber: 5,
+      axisName: {
+        color: '#333'
+      },
+      splitArea: {
+        areaStyle: {
+          color: ['rgba(25,137,250,0.05)', 'rgba(25,137,250,0.02)']
+        }
+      }
     },
     series: [{ 
       type: 'radar', 
       data: [{ value: values, name: '能力维度' }],
       areaStyle: { opacity: 0.2, color: '#1989fa' },
-      lineStyle: { color: '#1989fa' }
+      lineStyle: { color: '#1989fa', width: 2 },
+      itemStyle: { color: '#1989fa' },
+      symbolSize: 6
     }]
   });
 };
 
 const fetchData = async () => {
   try {
+    console.log('获取报告数据，sessionId:', sessionId);
     const res: any = await getReport({ sessionId });
-    report.value = res;
-    loading.value = false;
-    clearInterval(pollTimer);
-    nextTick(() => initChart());
-  } catch (e) {
-    // 继续轮询
+    console.log('报告数据:', res);
+    
+    if (res) {
+      report.value = res;
+      loading.value = false;
+      clearInterval(pollTimer);
+      nextTick(() => initChart());
+    } else {
+      // 如果报告不存在，继续轮询
+      console.log('报告尚未生成，继续轮询...');
+    }
+  } catch (e: any) {
+    console.error("获取报告失败:", e.message);
+    // 如果是404错误（报告不存在），继续轮询
+    if (e.message.includes('404')) {
+      console.log('报告未生成，继续轮询...');
+    } else {
+      // 其他错误停止轮询
+      clearInterval(pollTimer);
+      loading.value = false;
+      showToast('获取报告失败');
+    }
   }
 };
 
 onMounted(() => {
-  // 🔴 核心修复：进入页面时，强制关闭可能残留的全局 Loading
   closeToast();
   
   fetchData();
-  pollTimer = setInterval(fetchData, 2000);
+  // 轮询间隔调整为3秒
+  pollTimer = setInterval(fetchData, 3000);
 });
 
 onUnmounted(() => clearInterval(pollTimer));

@@ -20,7 +20,7 @@ public class Result<T> {
     // 无参的成功方法
     public static <T> Result<T> success() {
         Result<T> result = new Result<>();
-        result.setCode(200);
+        result.setCode(1);
         result.setMsg("success");
         return result;
     }

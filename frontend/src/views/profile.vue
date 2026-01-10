@@ -27,9 +27,14 @@
 import { ref, onMounted, nextTick } from 'vue';
 import { getGrowthTrend, getHistoryList } from '@/api';
 import * as echarts from 'echarts';
+import { useUserStore } from '@/stores/user';
+import { showToast } from 'vant';
+import { useRouter } from 'vue-router';
 
 const lineRef = ref<HTMLElement>();
 const list = ref<any[]>([]);
+const userStore = useUserStore();
+const router = useRouter();
 
 const initChart = (labels: string[], scores: number[]) => {
   if (!lineRef.value) return;
@@ -52,23 +57,64 @@ const initChart = (labels: string[], scores: number[]) => {
   });
 };
 
+// 模拟数据函数
+const getMockTrendData = () => {
+  return {
+    labels: ['Day1', 'Day2', 'Day3', 'Day4', 'Day5', 'Day6', 'Day7'],
+    scores: [65, 70, 75, 80, 85, 80, 90]
+  };
+};
+
+const getMockHistoryList = () => {
+  return {
+    records: [
+      { sessionId: 1, scenario: '模拟面试', score: 85, completedAt: '2023-10-01 10:30' },
+      { sessionId: 2, scenario: '公开演讲', score: 78, completedAt: '2023-10-02 14:20' },
+      { sessionId: 3, scenario: '小组讨论', score: 92, completedAt: '2023-10-03 16:45' },
+      { sessionId: 4, scenario: '团队协作', score: 88, completedAt: '2023-10-04 09:15' },
+      { sessionId: 5, scenario: '客户沟通', score: 82, completedAt: '2023-10-05 11:30' }
+    ]
+  };
+};
+
 onMounted(async () => {
   try {
-    const [trendRes, listRes] = await Promise.all([
-      getGrowthTrend({ userId: 1001, days: 7 }),
-      getHistoryList({ userId: 1001, page: 1, size: 10 })
-    ]);
+    const userId = userStore.userInfo.userId;
     
-    // 强制类型断言，确保数据正确
-    const trendData = trendRes as any;
-    list.value = (listRes as any).records || [];
+    if (!userId) {
+      showToast('请先登录');
+      router.push('/login');
+      return;
+    }
     
-    // 🔴 关键：数据回来后初始化图表
-    if (trendData && trendData.labels) {
+    // 尝试调用真实 API，如果失败则使用模拟数据
+    try {
+      const [trendRes, listRes] = await Promise.all([
+        getGrowthTrend({ userId: userId, days: 7 }),
+        getHistoryList({ userId: userId, page: 1, size: 10 })
+      ]);
+      
+      const trendData = trendRes as any;
+      list.value = (listRes as any).records || [];
+      
+      if (trendData && trendData.labels) {
+        nextTick(() => initChart(trendData.labels, trendData.scores));
+      }
+    } catch (apiError) {
+      console.warn('API 调用失败，使用模拟数据:', apiError);
+      
+      // 使用模拟数据
+      const trendData = getMockTrendData();
+      const listData = getMockHistoryList();
+      
+      list.value = listData.records;
       nextTick(() => initChart(trendData.labels, trendData.scores));
+      
+      showToast('使用模拟数据显示档案');
     }
   } catch (e) {
     console.error("加载档案失败", e);
+    showToast('加载档案失败');
   }
 });
 </script>

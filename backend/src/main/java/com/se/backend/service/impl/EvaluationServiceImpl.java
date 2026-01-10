@@ -3,6 +3,7 @@ package com.se.backend.service.impl;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.se.backend.dto.ReportDetailDTO;
 import com.se.backend.entity.EvaluationReport;
 import com.se.backend.entity.SessionMessage;
 import com.se.backend.entity.TrainingSession;
@@ -17,11 +18,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
 @Service
-public class EvaluationServiceImpl implements EvaluationService {
+public class EvaluationServiceImpl implements EvaluationService {  // 改为 implements 接口
 
     @Autowired private TrainingSessionMapper sessionMapper;
     @Autowired private SessionMessageMapper messageMapper;
@@ -29,7 +31,53 @@ public class EvaluationServiceImpl implements EvaluationService {
     @Autowired private LLMService llmService;
 
     @Override
+    public ReportDetailDTO getReportDetail(String sessionId) {
+        Long sId = Long.valueOf(sessionId);
+
+        // 1. 查询评估报告
+        QueryWrapper<EvaluationReport> query = new QueryWrapper<>();
+        query.eq("session_id", sId);
+        EvaluationReport report = reportMapper.selectOne(query);
+
+        if (report == null) {
+            return null;
+        }
+
+        // 2. 转换为DTO
+        ReportDetailDTO dto = new ReportDetailDTO();
+        dto.setSessionId(sessionId);
+        dto.setTotalScore(report.getTotalScore());
+        dto.setGeneratedAt(report.getUpdatedAt() != null ? report.getUpdatedAt() : report.getCreatedAt());
+
+        // 设置其他字段
+        dto.setStrengths(new ArrayList<>());
+        dto.setImprovements(new ArrayList<>());
+
+        // 如果rawReportJson中有更多信息，可以解析
+        if (report.getRawReportJson() != null && !report.getRawReportJson().isEmpty()) {
+            try {
+                JSONObject json = JSONUtil.parseObj(report.getRawReportJson());
+                // 解析并设置更多字段...
+            } catch (Exception e) {
+                log.error("解析报告JSON失败", e);
+            }
+        }
+
+        return dto;
+    }
+
+    @Override
+    public void generateReport(String sessionId) {
+        // 直接调用submitEvaluation来生成报告
+        try {
+            submitEvaluation(sessionId);
+        } catch (Exception e) {
+            log.error("生成报告失败", e);
+        }
+    }
+
     @Transactional(rollbackFor = Exception.class)
+    @Override
     public Long submitEvaluation(String sessionId) {
         Long sId = Long.valueOf(sessionId);
 
@@ -44,7 +92,6 @@ public class EvaluationServiceImpl implements EvaluationService {
         query.eq("session_id", sId);
         EvaluationReport existReport = reportMapper.selectOne(query);
         if (existReport != null) {
-            // 如果已存在，直接返回ID（避免重复生成）
             return existReport.getReportId();
         }
 
@@ -67,15 +114,11 @@ public class EvaluationServiceImpl implements EvaluationService {
 
             // 5. 构建 Prompt 并调用 LLM
             String prompt = buildEvaluationPrompt(history);
-            // 这里传入 null 作为 history 参数，因为我们将完整历史拼接到 prompt 字符串中了，
-            // 或者如果您的 llmService 支持传入 Message List 上下文，也可以调整调用方式。
-            // 依据之前的实现，llmService.callAI 接受 (List<SessionMessage>, String prompt)，
-            // 如果第一个参数传 null，则只发送 system prompt。此处我们将历史整合进 Prompt 发送。
             String aiResponse = llmService.callAI(null, prompt);
-            
+
             // 6. 解析结果并更新报告
             parseAndSaveReport(report, aiResponse);
-            
+
             // 7. 更新 Session 状态为 COMPLETED
             session.setStatus("COMPLETED");
             sessionMapper.updateById(session);
@@ -105,10 +148,9 @@ public class EvaluationServiceImpl implements EvaluationService {
         StringBuilder sb = new StringBuilder();
         sb.append("你是一位资深的面试官和职业教练。请根据以下的面试对话记录，对候选人的表现进行综合评估。\n\n");
         sb.append("【对话记录】：\n");
-        
+
         for (SessionMessage msg : history) {
             String role = "USER".equalsIgnoreCase(msg.getSender()) ? "候选人" : "面试官";
-            // 过滤空内容
             if (msg.getContentText() != null) {
                 sb.append(role).append("：").append(msg.getContentText()).append("\n");
             }
@@ -120,11 +162,12 @@ public class EvaluationServiceImpl implements EvaluationService {
         sb.append("3. JSON 字段映射要求如下：\n");
         sb.append("   - total_score: 整数 (0-100)，总体评分。\n");
         sb.append("   - summary_strengths: 字符串，候选人的主要亮点和优势。\n");
-        sb.append("   - key_issues: 字符串，候选人暴露出的主要问题或不足。\n");        sb.append("   - next_actions: 字符串，给候选人的改进建议或下一步行动计划。\n");
-        
+        sb.append("   - key_issues: 字符串，候选人暴露出的主要问题或不足。\n");
+        sb.append("   - next_actions: 字符串，给候选人的改进建议或下一步行动计划。\n");
+
         sb.append("\n【返回示例】：\n");
         sb.append("{\"total_score\": 85, \"summary_strengths\": \"逻辑清晰，回答有条理...\", \"key_issues\": \"语速过快，细节缺失...\", \"next_actions\": \"建议多练习STAR法则...\"}");
-        
+
         return sb.toString();
     }
 
@@ -135,18 +178,18 @@ public class EvaluationServiceImpl implements EvaluationService {
         try {
             // 清理可能的 Markdown 标记
             String cleanJson = jsonStr.replace("```json", "").replace("```", "").trim();
-            
-            // 尝试提取 JSON 部分（防止 LLM 在 JSON 前后废话）
+
+            // 尝试提取 JSON 部分
             if (!cleanJson.startsWith("{")) {
                 int start = cleanJson.indexOf("{");
                 int end = cleanJson.lastIndexOf("}");
                 if (start >= 0 && end > start) {
-                    cleanJson = cleanJson.substring(start, end + 1);                
+                    cleanJson = cleanJson.substring(start, end + 1);
                 }
             }
 
             JSONObject json = JSONUtil.parseObj(cleanJson);
-            
+
             if (json.containsKey("total_score")) {
                 report.setTotalScore(json.getInt("total_score"));
             }
@@ -154,16 +197,17 @@ public class EvaluationServiceImpl implements EvaluationService {
                 report.setSummaryStrengths(json.getStr("summary_strengths"));
             }
             if (json.containsKey("key_issues")) {
-                report.setKeyIssues(json.getStr("key_issues"));            
+                report.setKeyIssues(json.getStr("key_issues"));
             }
             if (json.containsKey("next_actions")) {
                 report.setNextActions(json.getStr("next_actions"));
             }
-            
+
             report.setStatus("COMPLETED");
             report.setUpdatedAt(LocalDateTime.now());
-            
-            reportMapper.updateById(report);            
+            report.setRawReportJson(cleanJson);
+
+            reportMapper.updateById(report);
         } catch (Exception e) {
             log.error("JSON解析失败, 原始响应: {}", jsonStr, e);
             throw new RuntimeException("AI响应格式错误，无法解析报告");
